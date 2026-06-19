@@ -23,6 +23,9 @@
         </div>
       </div>
       <div class="game-over-actions">
+        <button class="action-btn memorial" @click="$emit('showMemorial')">
+          📖 查看纪念册
+        </button>
         <button class="action-btn restart" @click="$emit('restart')">
           🔄 重新开始
         </button>
@@ -58,7 +61,7 @@ defineProps({
   }
 })
 
-defineEmits(['restart', 'load'])
+defineEmits(['restart', 'load', 'showMemorial'])
 </script>
 
 <style scoped>
@@ -181,6 +184,11 @@ defineEmits(['restart', 'load'])
 
 .action-btn.load {
   background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+}
+
+.action-btn.memorial {
+  background: linear-gradient(135deg, #8b4513, #a0522d);
   color: white;
 }
 

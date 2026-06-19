@@ -88,12 +88,19 @@
       :tools="tools"
       @restart="handleRestart"
       @load="showSaveManager"
+      @showMemorial="handleShowMemorial"
+    />
+
+    <MemorialBook
+      v-if="showMemorialBook"
+      :memorial="memorialBook"
+      @close="handleCloseMemorial"
     />
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useGame } from './composables/useGame'
 import { useAudio } from './composables/useAudio'
 import Campfire from './components/Campfire.vue'
@@ -104,6 +111,7 @@ import ActionPanel from './components/ActionPanel.vue'
 import LogPanel from './components/LogPanel.vue'
 import SaveManager from './components/SaveManager.vue'
 import GameOver from './components/GameOver.vue'
+import MemorialBook from './components/MemorialBook.vue'
 
 const {
   temperature,
@@ -119,6 +127,7 @@ const {
   gameOver,
   gameOverReason,
   actionLog,
+  memorialBook,
   isDanger,
   canMakeFire,
   huntSuccessRate,
@@ -133,6 +142,8 @@ const {
   deleteSave,
   restartGame
 } = useGame()
+
+const showMemorialBook = ref(false)
 
 const {
   muted,
@@ -223,6 +234,14 @@ function handleRestart() {
 }
 
 function showSaveManager() {
+}
+
+function handleShowMemorial() {
+  showMemorialBook.value = true
+}
+
+function handleCloseMemorial() {
+  showMemorialBook.value = false
 }
 
 watch(isBlizzard, (newVal) => {

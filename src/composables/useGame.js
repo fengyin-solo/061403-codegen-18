@@ -14,6 +14,40 @@ export function useGame() {
   const gameOverReason = ref('')
   const actionLog = ref([])
 
+  const memorialBook = ref({
+    startTime: null,
+    endTime: null,
+    survivedDays: 0,
+    deathReason: '',
+    finalStats: {},
+    peakResources: {
+      wood: 0,
+      food: 0,
+      hide: 0,
+      tools: 0,
+      heat: 0,
+      temperature: 0
+    },
+    keyEvents: [],
+    dailyStats: [],
+    totalActions: {
+      chopWood: 0,
+      hunt: 0,
+      huntSuccess: 0,
+      makeTools: 0,
+      makeFire: 0,
+      eatFood: 0
+    },
+    blizzardCount: 0
+  })
+
+  let hasHuntedSuccessfully = false
+  let hasMadeTools = false
+  let hasMadeFire = false
+  let milestone5Days = false
+  let milestone10Days = false
+  let milestone20Days = false
+
   const DAY_DURATION = 30000
   const NIGHT_DURATION = 20000
   const HEAT_CONSUMPTION_RATE = 2
@@ -37,11 +71,86 @@ export function useGame() {
     }
   }
 
+  function recordKeyEvent(description, type = 'event', icon = '📌') {
+    memorialBook.value.keyEvents.push({
+      day: dayCount.value,
+      description,
+      type,
+      icon,
+      timestamp: Date.now(),
+      isDay: isDay.value
+    })
+  }
+
+  function updatePeakResources() {
+    if (wood.value > memorialBook.value.peakResources.wood) {
+      memorialBook.value.peakResources.wood = wood.value
+    }
+    if (food.value > memorialBook.value.peakResources.food) {
+      memorialBook.value.peakResources.food = food.value
+    }
+    if (hide.value > memorialBook.value.peakResources.hide) {
+      memorialBook.value.peakResources.hide = hide.value
+    }
+    if (tools.value > memorialBook.value.peakResources.tools) {
+      memorialBook.value.peakResources.tools = tools.value
+    }
+    if (heat.value > memorialBook.value.peakResources.heat) {
+      memorialBook.value.peakResources.heat = Math.round(heat.value)
+    }
+    if (temperature.value > memorialBook.value.peakResources.temperature) {
+      memorialBook.value.peakResources.temperature = temperature.value
+    }
+  }
+
+  function recordDailyStats() {
+    memorialBook.value.dailyStats.push({
+      day: dayCount.value,
+      endTemperature: temperature.value,
+      endHeat: Math.round(heat.value),
+      wood: wood.value,
+      food: food.value,
+      hide: hide.value,
+      tools: tools.value,
+      hadBlizzard: isBlizzard.value
+    })
+  }
+
+  function checkMilestones() {
+    if (dayCount.value >= 5 && !milestone5Days) {
+      milestone5Days = true
+      recordKeyEvent('成功存活 5 天！营地初具规模', 'milestone', '🏆')
+    }
+    if (dayCount.value >= 10 && !milestone10Days) {
+      milestone10Days = true
+      recordKeyEvent('存活 10 天！你是真正的生存专家', 'milestone', '🎖️')
+    }
+    if (dayCount.value >= 20 && !milestone20Days) {
+      milestone20Days = true
+      recordKeyEvent('传奇诞生！存活 20 天以上', 'milestone', '👑')
+    }
+  }
+
+  function finalizeMemorialBook() {
+    memorialBook.value.endTime = Date.now()
+    memorialBook.value.survivedDays = dayCount.value
+    memorialBook.value.deathReason = gameOverReason.value
+    memorialBook.value.finalStats = {
+      temperature: temperature.value,
+      heat: Math.round(heat.value),
+      wood: wood.value,
+      food: food.value,
+      hide: hide.value,
+      tools: tools.value
+    }
+  }
+
   function checkGameOver() {
     if (temperature.value <= 20) {
       gameOver.value = true
       gameOverReason.value = '体温过低，你在严寒中失去了意识...'
       stopTimers()
+      finalizeMemorialBook()
       addLog('游戏结束：体温过低！', 'danger')
     }
     if (temperature.value >= 100) {
@@ -71,6 +180,7 @@ export function useGame() {
 
   function startNightCycle() {
     addLog(`夜幕降临，第 ${dayCount.value} 天结束`, 'info')
+    recordDailyStats()
     nightConsumptionTimer = setInterval(() => {
       consumeHeat()
     }, 1000)
@@ -83,6 +193,7 @@ export function useGame() {
   function startDayCycle() {
     dayCount.value++
     addLog(`天亮了，第 ${dayCount.value} 天开始`, 'success')
+    checkMilestones()
     isBlizzard.value = false
     if (nightConsumptionTimer) {
       clearInterval(nightConsumptionTimer)
@@ -101,6 +212,8 @@ export function useGame() {
 
   function triggerBlizzard() {
     isBlizzard.value = true
+    memorialBook.value.blizzardCount++
+    recordKeyEvent('暴风雪来袭！所有消耗加倍', 'danger', '🌨️')
     addLog('⚠️ 暴风雪来袭！所有消耗加倍！', 'danger')
   }
 
@@ -113,6 +226,9 @@ export function useGame() {
     temperature.value = Math.max(0, temperature.value - tempCost)
     const woodGained = Math.floor(Math.random() * 3) + 2
     wood.value += woodGained
+    
+    memorialBook.value.totalActions.chopWood++
+    updatePeakResources()
     
     addLog(`砍柴：获得 ${woodGained} 木头，消耗 ${tempCost} 体温`, 'action')
     
@@ -131,11 +247,22 @@ export function useGame() {
     
     temperature.value = Math.max(0, temperature.value - tempCost)
     
+    memorialBook.value.totalActions.hunt++
+    
     if (Math.random() < huntSuccessRate.value) {
       const foodGained = Math.floor(Math.random() * 3) + 2
       const hideGained = Math.floor(Math.random() * 2) + 1
       food.value += foodGained
       hide.value += hideGained
+      
+      memorialBook.value.totalActions.huntSuccess++
+      updatePeakResources()
+      
+      if (!hasHuntedSuccessfully) {
+        hasHuntedSuccessfully = true
+        recordKeyEvent('首次狩猎成功！你证明了自己的生存能力', 'achievement', '🎯')
+      }
+      
       addLog(`狩猎成功：获得 ${foodGained} 食物，${hideGained} 兽皮，消耗 ${tempCost} 体温`, 'success')
     } else {
       addLog(`狩猎失败：消耗 ${tempCost} 体温，空手而归`, 'warning')
@@ -163,6 +290,14 @@ export function useGame() {
     tools.value += 1
     temperature.value = Math.max(0, temperature.value - tempCost)
     
+    memorialBook.value.totalActions.makeTools++
+    updatePeakResources()
+    
+    if (!hasMadeTools) {
+      hasMadeTools = true
+      recordKeyEvent('首次制作工具！你的生存效率将大大提升', 'achievement', '🔧')
+    }
+    
     addLog(`制作工具：获得 1 工具，消耗 ${tempCost} 体温`, 'success')
     checkGameOver()
   }
@@ -178,6 +313,14 @@ export function useGame() {
     heat.value = Math.min(100, heat.value + heatGained)
     temperature.value = Math.min(100, temperature.value + 10)
     
+    memorialBook.value.totalActions.makeFire++
+    updatePeakResources()
+    
+    if (!hasMadeFire) {
+      hasMadeFire = true
+      recordKeyEvent('首次生火成功！温暖重新回到了营地', 'achievement', '🔥')
+    }
+    
     addLog(`生火：获得 ${heatGained} 热量，体温上升 10`, 'success')
   }
 
@@ -190,6 +333,9 @@ export function useGame() {
     food.value -= 1
     const tempGained = Math.floor(Math.random() * 10) + 5
     temperature.value = Math.min(100, temperature.value + tempGained)
+    
+    memorialBook.value.totalActions.eatFood++
+    updatePeakResources()
     
     addLog(`进食：体温恢复 ${tempGained}`, 'success')
   }
@@ -297,6 +443,41 @@ export function useGame() {
     addLog(`已删除存档：${slot}`, 'info')
   }
 
+  function resetMemorialBook() {
+    memorialBook.value = {
+      startTime: Date.now(),
+      endTime: null,
+      survivedDays: 0,
+      deathReason: '',
+      finalStats: {},
+      peakResources: {
+        wood: 10,
+        food: 5,
+        hide: 0,
+        tools: 0,
+        heat: 50,
+        temperature: 80
+      },
+      keyEvents: [],
+      dailyStats: [],
+      totalActions: {
+        chopWood: 0,
+        hunt: 0,
+        huntSuccess: 0,
+        makeTools: 0,
+        makeFire: 0,
+        eatFood: 0
+      },
+      blizzardCount: 0
+    }
+    hasHuntedSuccessfully = false
+    hasMadeTools = false
+    hasMadeFire = false
+    milestone5Days = false
+    milestone10Days = false
+    milestone20Days = false
+  }
+
   function restartGame() {
     temperature.value = 80
     heat.value = 50
@@ -311,6 +492,9 @@ export function useGame() {
     gameOverReason.value = ''
     actionLog.value = []
     
+    resetMemorialBook()
+    recordKeyEvent('营地建立！开始你的雪地生存之旅', 'start', '🏕️')
+    
     stopTimers()
     startTimers()
     
@@ -318,6 +502,8 @@ export function useGame() {
   }
 
   onMounted(() => {
+    resetMemorialBook()
+    recordKeyEvent('营地建立！开始你的雪地生存之旅', 'start', '🏕️')
     startTimers()
     addLog('欢迎来到雪地生存！白天收集资源，夜晚保持温暖。', 'info')
   })
@@ -340,6 +526,7 @@ export function useGame() {
     gameOver,
     gameOverReason,
     actionLog,
+    memorialBook,
     isDanger,
     canMakeFire,
     canHunt,
